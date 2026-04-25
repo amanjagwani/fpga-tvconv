@@ -14,15 +14,20 @@ All signal processing runs in programmable logic (PL) using custom HLS IPs conne
 ## Signal Flow
 
 ```
-I2S RX (interleaved L/R 48kHz)
-  → i2s_2_fft (deinterleave, pad imag=0, TLAST every P samples)
-    → L: partition_buffer → FIFO → FFT_L → fft_mirror_replace ──→ spectral_convolve → FIFO → IFFT
-    → R: partition_buffer → FIFO → FFT_R → fft_mirror_replace ──↗         ↓
-                                                                    overlap_add
-                                                                        ↓
-                                                              fft_2_i2s (mono→stereo)
-                                                                        ↓
-                                                                     I2S TX
+I2S RX (interleaved L/R, 48 kHz)
+ └→ i2s_2_fft (deinterleave, pad imag=0, TLAST every P samples)
+     ├→ L: partition_buffer → FIFO → FFT_L → fft_mirror_replace ─┐
+     └→ R: partition_buffer → FIFO → FFT_R → fft_mirror_replace ─┤
+                                                                  ↓
+                                                        spectral_convolve
+                                                                  ↓
+                                                           FIFO → IFFT
+                                                                  ↓
+                                                            overlap_add
+                                                                  ↓
+                                                     fft_2_i2s (mono → stereo)
+                                                                  ↓
+                                                               I2S TX
 ```
 
 Both L and R channels received via I2S are treated as independent live audio signals to be convolved with each other.
