@@ -1,0 +1,10 @@
+*.cache/
+*.gen/
+*.runs/
+*.ip_user_files/
+*.sim/
+*.hw/
+ip_upgrade.log
+
+**/solution1/
+**/hls.app
