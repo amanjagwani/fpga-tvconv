@@ -9,7 +9,7 @@ union fp_int
 void overlap_add(hls::stream<stream_fft_float> &in,
                  hls::stream<stream_audio> &out,
                  uint16_t &fft_size,
-                 uint16_t &output_gain)
+                 volatile float &output_gain)
 {
 #pragma HLS INTERFACE axis port = in
 #pragma HLS INTERFACE axis port = out
@@ -25,20 +25,18 @@ void overlap_add(hls::stream<stream_fft_float> &in,
 
     ap_uint<16> partition_size = fft_size >> 1; // P = N/2
 
-    float scale = (fft_size > 0) ? (1.0f / (float)fft_size) : 0.0f;
-    fp_int atten;
-    atten.u = (output_gain < 127) ? ((127 - (uint32_t)output_gain) << 23) : 0;
-    scale *= atten.f;
+    float scale = (fft_size > 0) ? (1.0f / (float)fft_size) * (1.0f / 8388608.0f) : 0.0f;
+    scale *= output_gain;
 
-absorb:
+accumulate:
     for (ap_uint<16> i = 0; i < fft_size; i++)
     {
 #pragma HLS LOOP_TRIPCOUNT min = 1 max = 1024
 #pragma HLS PIPELINE II = 1
-        stream_fft_float in_sample = in.read();
+        stream_fft_float s = in.read();
 
         fp_int conv;
-        conv.u = (uint32_t)in_sample.data(31, 0);
+        conv.u = (uint32_t)s.data(31, 0);
         float in_real = conv.f;
 
         if (i < partition_size)

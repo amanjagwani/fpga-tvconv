@@ -6,6 +6,7 @@ union fp_int
     uint32_t u;
 };
 
+// bins 1..N/2-1 = conj of the upper half, which has less rounding noise for real input (PG109)
 void fft_mirror_replace(hls::stream<stream_fft_float> &in,
                         hls::stream<stream_fft_float> &out,
                         uint16_t &fft_size)
@@ -23,7 +24,7 @@ void fft_mirror_replace(hls::stream<stream_fft_float> &in,
     ap_uint<16> N = fft_size;
     ap_uint<16> No2 = fft_size >> 1;
 
-read_loop:
+collect:
     for (ap_uint<16> i = 0; i < N; i++)
     {
 #pragma HLS LOOP_TRIPCOUNT min = 1 max = 1024
@@ -36,7 +37,7 @@ read_loop:
         buf_imag[i] = im.f;
     }
 
-emit_loop:
+emit:
     for (ap_uint<16> k = 0; k < N; k++)
     {
 #pragma HLS LOOP_TRIPCOUNT min = 1 max = 1024

@@ -1,6 +1,6 @@
 #include "overlap_add.h"
 
-void overlap_add(hls::stream<stream_ifft_out> &in,
+void overlap_add(hls::stream<stream_fft_wide> &in,
                  hls::stream<stream_audio> &out,
                  uint16_t &fft_size,
                  uint16_t &output_gain)
@@ -19,12 +19,13 @@ void overlap_add(hls::stream<stream_ifft_out> &in,
 
     ap_uint<16> partition_size = fft_size >> 1; // P = N/2
 
-absorb:
+accumulate:
     for (ap_uint<16> i = 0; i < fft_size; i++)
     {
+#pragma HLS LOOP_TRIPCOUNT min = 1 max = 1024
 #pragma HLS PIPELINE II = 1
-        stream_ifft_out in_sample = in.read();
-        ap_int<IFFT_OUTPUT_WIDTH> in_real = in_sample.data(IFFT_OUTPUT_WIDTH - 1, 0);
+        stream_fft_wide s = in.read();
+        ap_int<IFFT_OUTPUT_WIDTH> in_real = s.data(IFFT_OUTPUT_WIDTH - 1, 0);
 
         if (i < partition_size)
         {
@@ -48,6 +49,7 @@ absorb:
 emit:
     for (ap_uint<16> i = 0; i < partition_size; i++)
     {
+#pragma HLS LOOP_TRIPCOUNT min = 1 max = 512
 #pragma HLS PIPELINE II = 1
         stream_audio o;
         o.data = 0;

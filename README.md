@@ -1,127 +1,42 @@
-# FPGA Time-Varying Convolution
+# fpga-tvconv
 
-Real-time convolution of two live audio signals on a Zybo Z7-020 (Xilinx Zynq-7000) FPGA board. Two channels of live audio input are convolved with each other in the frequency domain using multi-partition overlap-add FFT convolution with Frequency-Domain Delay Lines.
-
-All signal processing runs in programmable logic (PL) using custom HLS IPs connected via AXI4-Stream. The ARM PS only configures I2S and HLS IP parameters at startup.
-
-## Hardware
-
-- **Board**: Digilent Zybo Z7-020 (XC7Z020-1CLG400C)
-- **Audio codec**: SSM2603 (I2S, 48 kHz, 24-bit)
-- **PL clock**: 122.88 MHz
-- **Vivado/Vitis**: 2022.2
-
-## Signal Flow
+Real-time time-varying convolution of two live audio signals on a Zynq-7000. The left and right inputs of the codec are convolved with each other in the frequency domain (multi-partition overlap-add with frequency-domain delay lines, uniform partitions of P samples). All signal processing runs in the PL as Vitis HLS IPs chained with AXI4-Stream; the ARM only sets IP parameters over AXI-Lite. Target: Digilent Zybo Z7-20, Vivado/Vitis 2025.2.
 
 ```
-I2S RX (interleaved L/R, 48 kHz)
- └→ i2s_2_fft (deinterleave, pad imag=0, TLAST every P samples)
-     ├→ L: partition_buffer → FIFO → FFT_L → fft_mirror_replace ─┐
-     └→ R: partition_buffer → FIFO → FFT_R → fft_mirror_replace ─┤
-                                                                  ↓
-                                                        spectral_convolve
-                                                                  ↓
-                                                           FIFO → IFFT
-                                                                  ↓
-                                                            overlap_add
-                                                                  ↓
-                                                     fft_2_i2s (mono → stereo)
-                                                                  ↓
-                                                               I2S TX
+I2S RX → i2s_2_fft ─┬→ partition_buffer → FFT → fft_mirror_replace ─┐
+                    └→ partition_buffer → FFT → fft_mirror_replace ─┴→ spectral_convolve → IFFT → overlap_add → fft_2_i2s → I2S TX
 ```
 
-Both L and R channels received via I2S are treated as independent live audio signals to be convolved with each other.
+| Build        | Datapath                                                                                   | Filter length (P = 512)          |
+| ------------ | ------------------------------------------------------------------------------------------ | -------------------------------- |
+| `float/`     | float FFTs and IPs                                                                         | K ≤ 8 partitions in BRAM (85 ms) |
+| `fixed/`     | unscaled forward FFTs, scaled IFFT                                                         | K ≤ 8 partitions in BRAM (85 ms) |
+| `float_ddr/` | float, delay lines in DDR (`spectral_convolve_ddr`, uses the `float/hls` IPs for the rest) | K ≤ 1024 partitions (10.9 s)     |
 
-## Key Parameters
+| Path                 | Contents                                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------------------- |
+| `i2s_2_fft/`         | I2S → two 48-bit sample streams, TLAST every P samples (HLS)                                            |
+| `fft_2_i2s/`         | output stream → interleaved I2S (HLS)                                                                   |
+| `<build>/hls/<ip>/`  | HLS IPs of each build (`complex_multiply` is the old single-partition version, not in any block design) |
+| `<build>/vivado/`    | `build.tcl`, block design Tcl (`design_1.tcl`) and constraints                                          |
+| `<build>/vitis/src/` | PS application                                                                                          |
 
-| Parameter                    | Value                           |
-| ---------------------------- | ------------------------------- |
-| FFT size (N)                 | variable                        |
-| Partition size (P)           | N/2                             |
-| Sample rate                  | 48 kHz                          |
-| Audio bit depth              | 24-bit signed                   |
-| Partitions (K)               | 1–8 (configurable via AXI-Lite) |
-| Effective convolution length | K × P samples                   |
+## Build
 
-## Two Builds
+1. HLS IPs: in every folder that has an `hls_config.cfg` (`i2s_2_fft/`, `fft_2_i2s/`, `<build>/hls/*/`), with `<top>` = its `syn.top`:
+   ```
+   v++ -c --mode hls --config hls_config.cfg --work_dir <top>
+   vitis-run --mode hls --package --config hls_config.cfg --work_dir <top>
+   ```
+   `float_ddr` also needs the `float/hls` IPs.
+2. Bitstream and XSA (no board files needed; the PS7 setup is in `design_1.tcl`):
+   ```
+   vivado -mode batch -source float/vivado/build.tcl -tclargs tvconv_float_v1.xsa
+   ```
+   The project goes to `<build>/vivado/vivado_proj/`, the XSA to `<build>/vivado/xsa/`, with timing and utilisation reports in `vivado_proj/`.
+3. Vitis: create a standalone platform (`ps7_cortexa9_0`) from the XSA, add an empty application with the build's `vitis/src/` files, build, and run over JTAG.
+4. The app sets N = 1024, P = 512, the number of partitions (`NUM_PARTITIONS`) and the output gain at start-up; edit the constants at the top of `main.cpp`.
 
-### Float
+## Board
 
-### Fixed
-
-Unscaled forward FFTs (S_fwd=1) with scaled IFFT (S_inv=N) for exact 1/N normalization. 80-bit wide datapaths (35-bit components).
-
-## HLS IPs
-
-| IP                   | Description                                                                                                                                                                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `i2s_2_fft`          | Deinterleaves I2S L/R, reformats 32-bit I2S → 48-bit FFT (24-bit real, imag=0), generates TLAST every P samples                                                                                                                                              |
-| `fft_2_i2s`          | Extracts real part from 48-bit FFT format, reinterleaves L/R → 32-bit I2S                                                                                                                                                                                    |
-| `partition_buffer`   | Collects P samples at audio rate, outputs 2P samples (P data + P zeros) at PL rate for zero-padded FFT                                                                                                                                                       |
-| `spectral_convolve`  | Multi-partition frequency dimain delay line convolution. Maintains K spectral frames for both inputs in circular BRAM buffers. Each frame: ingest, multiply-accumulate K products with index reversal, emit                                                  |
-| `overlap_add`        | Overlap-add reconstruction. First P samples overlap-added with previous tail, last P saved.                                                                                                                                                                  |
-| `fft_mirror_replace` | Replaces lower-half FFT bins with conjugates of upper half, forcing perfect conjugate symmetry for real-valued input. Placed after each forward FFT. Based on Xilinx PG109 recommendation (see below). Most audible in the fixed build; negligible in float. |
-| `complex_multiply`   | single-partition convolution                                                                                                                                                                                                                                 |
-
-All IPs use `ap_ctrl_none` (free-running), AXI4-Stream interfaces, and AXI-Lite parameters configurable from PS at startup.
-
-### Why fft_mirror_replace
-
-From [Xilinx PG109 — FFT LogiCORE IP Product Guide v9.1](https://www.xilinx.com/support/documents/ip_documentation/xfft/v9_1/pg109-xfft.pdf), section on real-valued input data:
-
-> _The FFT core accepts complex data samples, but can perform a transform on real-valued data by setting all imaginary input samples to zero. Due to the finite wordlength effects described previously, noise is introduced during the transform, resulting in the output data not being perfectly symmetric. The DIT and DIF FFT algorithms have different noise effects due to the different calculation order. The asymmetry between the two halves of the result is more noticeable at larger point sizes. In addition, the noise is more prominent in the lower frequency bins. Therefore, Xilinx recommends that the upper half (N/2+1 to N points) of the output data is used when performing a real-valued FFT._
-
-`fft_mirror_replace` implements this recommendation.
-
-## Repository Structure
-
-```
-fpga-tvconv/
-  i2s_2_fft/                  # I2S → FFT format converter (shared)
-  fft_2_i2s/                  # FFT format → I2S converter (shared)
-  float/
-    hls/                      # HLS IP source
-      partition_buffer/
-      complex_multiply/       # Legacy single-partition
-      spectral_convolve/      # Multi-partition FDL (recommended)
-      overlap_add/
-      fft_mirror_replace/
-    vivado/                   # Vivado project (block design, constraints, XSAs)
-    vitis/src/                # PS application source
-  fixed/
-    hls/                      # Same IPs, 80-bit fixed-point variant
-      partition_buffer/
-      complex_multiply/
-      spectral_convolve/
-      overlap_add/
-      fft_mirror_replace/
-    vivado/                   # Vivado project (unscaled build)
-    vitis/src/                # PS application source
-```
-
-## Building
-
-### HLS IPs
-
-1. Open Vitis HLS 2022.2
-2. Create a project for each IP, set the top function, add source
-3. Run C Synthesis → Export RTL (IP Catalog format)
-
-### Vivado
-
-1. Open the `.xpr` project in `float/vivado/` or `fixed/vivado/`
-2. Refresh IP Catalog (picks up exported HLS IPs)
-3. Generate Bitstream
-4. Export Hardware (include bitstream) → produces `.xsa`
-
-### Vitis PS Application
-
-The `vitis/src/` folders contain the PS application source files. To create a Vitis project:
-
-1. Open Vitis 2022.2
-2. **File → New → Application Project**
-3. Select **Create a new platform from hardware (XSA)** → browse to the `.xsa` from the Vivado export
-4. Name the application, select **Empty Application (C++)** template
-5. Copy `main.cpp`, `audio.h`, and `audio.c` from the corresponding `vitis/src/` folder into the project's `src/` directory
-6. Build the project
-7. **Run As → Launch on Hardware** to program the FPGA and start the application
+Zybo Z7-20 (XC7Z020-1CLG400C), SSM2603 codec: line in (L and R are the two signals) → headphone/line out, 48 kHz, 24-bit. PL clock 122.88 MHz from the 125 MHz board clock. Pins are in `<build>/vivado/ZYBO_Master_Constraints.xdc`.

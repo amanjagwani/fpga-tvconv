@@ -20,12 +20,18 @@ set script_folder [_tcl::get_script_folder]
 ################################################################
 # Check if script is running in correct Vivado version.
 ################################################################
-set scripts_vivado_version 2022.2
+set scripts_vivado_version 2025.2
 set current_vivado_version [version -short]
 
 if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
    puts ""
-   catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
+   if { [string compare $scripts_vivado_version $current_vivado_version] > 0 } {
+      catch {common::send_gid_msg -ssname BD::TCL -id 2042 -severity "ERROR" " This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Sourcing the script failed since it was created with a future version of Vivado."}
+
+   } else {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
+
+   }
 
    return 1
 }
@@ -44,7 +50,6 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 set list_projs [get_projects -quiet]
 if { $list_projs eq "" } {
    create_project project_1 myproj -part xc7z020clg400-1
-   set_property BOARD_PART digilentinc.com:zybo-z7-20:part0:1.1 [current_project]
 }
 
 
@@ -124,23 +129,24 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
-xilinx.com:ip:axis_broadcaster:1.1\
-xilinx.com:ip:axis_data_fifo:2.0\
+xilinx.com:ip:processing_system7:5.5\
 xilinx.com:ip:clk_wiz:6.0\
-aj:ajlib:complex_multiply:1.0\
-aj:ajlib:fft_2_i2s:1.0\
-aj:ajlib:i2s_2_fft:1.0\
+xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:xlconstant:1.1\
+xilinx.com:ip:ila:6.2\
 xilinx.com:ip:i2s_receiver:1.0\
 xilinx.com:ip:i2s_transmitter:1.0\
-xilinx.com:ip:ila:6.2\
+xilinx.com:ip:xlconcat:2.1\
+xilinx.com:ip:xfft:9.1\
+xilinx.com:ip:axis_data_fifo:2.0\
+xilinx.com:ip:system_ila:1.1\
+xilinx.com:ip:axis_broadcaster:1.1\
+aj:ajlib:fft_2_i2s:1.0\
+aj:ajlib:fft_mirror_replace:1.0\
+aj:ajlib:i2s_2_fft:1.0\
 aj:ajlib:overlap_add:1.0\
 aj:ajlib:partition_buffer:1.0\
-xilinx.com:ip:proc_sys_reset:5.0\
-xilinx.com:ip:processing_system7:5.5\
-xilinx.com:ip:system_ila:1.1\
-xilinx.com:ip:xfft:9.1\
-xilinx.com:ip:xlconcat:2.1\
-xilinx.com:ip:xlconstant:1.1\
+aj:ajlib:spectral_convolve:1.0\
 "
 
    set list_ips_missing ""
@@ -213,111 +219,13 @@ proc create_root_design { parentCell } {
 
   # Create ports
   set clk_in [ create_bd_port -dir I -type clk -freq_hz 125000000 clk_in ]
+  set mclk_0 [ create_bd_port -dir O -type clk mclk_0 ]
   set dout_0 [ create_bd_port -dir O -from 0 -to 0 dout_0 ]
   set lrclk_out_0 [ create_bd_port -dir O lrclk_out_0 ]
-  set lrclk_out_1 [ create_bd_port -dir O lrclk_out_1 ]
-  set mclk_0 [ create_bd_port -dir O -type clk mclk_0 ]
   set sclk_out_0 [ create_bd_port -dir O sclk_out_0 ]
+  set lrclk_out_1 [ create_bd_port -dir O lrclk_out_1 ]
   set sdata_0_in_0 [ create_bd_port -dir I sdata_0_in_0 ]
   set sdata_0_out_0 [ create_bd_port -dir O sdata_0_out_0 ]
-
-  # Create instance: axis_broadcaster_0, and set properties
-  set axis_broadcaster_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_broadcaster:1.1 axis_broadcaster_0 ]
-
-  # Create instance: axis_data_fifo_0, and set properties
-  set axis_data_fifo_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_0 ]
-  set_property CONFIG.FIFO_DEPTH {2048} $axis_data_fifo_0
-
-
-  # Create instance: axis_data_fifo_1, and set properties
-  set axis_data_fifo_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_1 ]
-  set_property CONFIG.FIFO_DEPTH {2048} $axis_data_fifo_1
-
-
-  # Create instance: axis_data_fifo_2, and set properties
-  set axis_data_fifo_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_2 ]
-  set_property CONFIG.FIFO_DEPTH {16} $axis_data_fifo_2
-
-
-  # Create instance: clk_wiz_0, and set properties
-  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
-  set_property -dict [list \
-    CONFIG.CLKOUT1_JITTER {509.210} \
-    CONFIG.CLKOUT1_PHASE_ERROR {704.890} \
-    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {122.880} \
-    CONFIG.MMCM_CLKFBOUT_MULT_F {58.125} \
-    CONFIG.MMCM_CLKOUT0_DIVIDE_F {5.375} \
-    CONFIG.MMCM_DIVCLK_DIVIDE {11} \
-    CONFIG.USE_LOCKED {false} \
-    CONFIG.USE_RESET {false} \
-  ] $clk_wiz_0
-
-
-  # Create instance: clk_wiz_1, and set properties
-  set clk_wiz_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_1 ]
-  set_property -dict [list \
-    CONFIG.CLKOUT1_JITTER {342.371} \
-    CONFIG.CLKOUT1_PHASE_ERROR {363.018} \
-    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {12.288} \
-    CONFIG.CLK_OUT1_PORT {mclk} \
-    CONFIG.MMCM_CLKFBOUT_MULT_F {58.875} \
-    CONFIG.MMCM_CLKOUT0_DIVIDE_F {84.125} \
-    CONFIG.MMCM_DIVCLK_DIVIDE {7} \
-    CONFIG.USE_RESET {false} \
-  ] $clk_wiz_1
-
-
-  # Create instance: complex_multiply_1, and set properties
-  set complex_multiply_1 [ create_bd_cell -type ip -vlnv aj:ajlib:complex_multiply:1.0 complex_multiply_1 ]
-
-  # Create instance: fft_2_i2s_0, and set properties
-  set fft_2_i2s_0 [ create_bd_cell -type ip -vlnv aj:ajlib:fft_2_i2s:1.0 fft_2_i2s_0 ]
-
-  # Create instance: i2s_2_fft_0, and set properties
-  set i2s_2_fft_0 [ create_bd_cell -type ip -vlnv aj:ajlib:i2s_2_fft:1.0 i2s_2_fft_0 ]
-
-  # Create instance: i2s_receiver_0, and set properties
-  set i2s_receiver_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:i2s_receiver:1.0 i2s_receiver_0 ]
-  set_property CONFIG.C_32BIT_LR {1} $i2s_receiver_0
-
-
-  # Create instance: i2s_transmitter_0, and set properties
-  set i2s_transmitter_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:i2s_transmitter:1.0 i2s_transmitter_0 ]
-  set_property -dict [list \
-    CONFIG.C_32BIT_LR {1} \
-    CONFIG.C_IS_MASTER {0} \
-  ] $i2s_transmitter_0
-
-
-  # Create instance: ila_0, and set properties
-  set ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_0 ]
-  set_property CONFIG.C_SLOT_0_AXI_PROTOCOL {AXI4S} $ila_0
-
-
-  # Create instance: ila_2, and set properties
-  set ila_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_2 ]
-  set_property -dict [list \
-    CONFIG.C_MONITOR_TYPE {Native} \
-    CONFIG.C_NUM_OF_PROBES {5} \
-  ] $ila_2
-
-
-  # Create instance: ila_5, and set properties
-  set ila_5 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_5 ]
-  set_property CONFIG.C_SLOT_0_AXI_PROTOCOL {AXI4S} $ila_5
-
-
-  # Create instance: overlap_add_1, and set properties
-  set overlap_add_1 [ create_bd_cell -type ip -vlnv aj:ajlib:overlap_add:1.0 overlap_add_1 ]
-
-  # Create instance: partition_buffer_0, and set properties
-  set partition_buffer_0 [ create_bd_cell -type ip -vlnv aj:ajlib:partition_buffer:1.0 partition_buffer_0 ]
-
-  # Create instance: partition_buffer_2, and set properties
-  set partition_buffer_2 [ create_bd_cell -type ip -vlnv aj:ajlib:partition_buffer:1.0 partition_buffer_2 ]
-
-  # Create instance: proc_sys_reset_0, and set properties
-  set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
   # Create instance: processing_system7_0, and set properties
   set processing_system7_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0 ]
@@ -565,6 +473,7 @@ proc create_root_design { parentCell } {
     CONFIG.PCW_PACKAGE_DDR_DQS_TO_CLK_DELAY_3 {-0.100} \
     CONFIG.PCW_PCAP_PERIPHERAL_CLKSRC {IO PLL} \
     CONFIG.PCW_PCAP_PERIPHERAL_FREQMHZ {200} \
+    CONFIG.PCW_PERIPHERAL_BOARD_PRESET {part0} \
     CONFIG.PCW_PJTAG_PERIPHERAL_ENABLE {0} \
     CONFIG.PCW_PLL_BYPASSMODE_ENABLE {0} \
     CONFIG.PCW_PRESET_BANK0_VOLTAGE {LVCMOS 3.3V} \
@@ -675,78 +584,83 @@ proc create_root_design { parentCell } {
   ] $processing_system7_0
 
 
-  # Create instance: ps7_0_axi_periph, and set properties
-  set ps7_0_axi_periph [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 ps7_0_axi_periph ]
-  set_property CONFIG.NUM_MI {8} $ps7_0_axi_periph
+  # Create instance: clk_wiz_0, and set properties
+  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
+  set_property -dict [list \
+    CONFIG.CLKIN1_JITTER_PS {80.0} \
+    CONFIG.CLKOUT1_JITTER {621.908} \
+    CONFIG.CLKOUT1_PHASE_ERROR {432.485} \
+    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {12.288} \
+    CONFIG.CLKOUT2_REQUESTED_OUT_FREQ {122.27} \
+    CONFIG.CLKOUT2_USED {true} \
+    CONFIG.CLK_OUT1_PORT {mclk} \
+    CONFIG.CLK_OUT2_PORT {clk_pl} \
+    CONFIG.MMCM_CLKFBOUT_MULT_F {39.125} \
+    CONFIG.MMCM_CLKIN1_PERIOD {8.000} \
+    CONFIG.MMCM_CLKIN2_PERIOD {10.0} \
+    CONFIG.MMCM_CLKOUT0_DIVIDE_F {49.750} \
+    CONFIG.MMCM_CLKOUT1_DIVIDE {5} \
+    CONFIG.MMCM_DIVCLK_DIVIDE {8} \
+    CONFIG.NUM_OUT_CLKS {2} \
+    CONFIG.PRIMITIVE {MMCM} \
+    CONFIG.USE_LOCKED {true} \
+    CONFIG.USE_RESET {false} \
+  ] $clk_wiz_0
 
 
   # Create instance: rst_clk_wiz_0_122M, and set properties
   set rst_clk_wiz_0_122M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_clk_wiz_0_122M ]
 
-  # Create instance: system_ila_0, and set properties
-  set system_ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 system_ila_0 ]
-  set_property -dict [list \
-    CONFIG.C_NUM_MONITOR_SLOTS {6} \
-    CONFIG.C_SLOT {5} \
-    CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-    CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-    CONFIG.C_SLOT_2_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-    CONFIG.C_SLOT_3_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-    CONFIG.C_SLOT_4_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-    CONFIG.C_SLOT_5_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
-  ] $system_ila_0
+  # Create instance: proc_sys_reset_0, and set properties
+  set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
 
+  # Create instance: xlconstant_0, and set properties
+  set xlconstant_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_0 ]
+
+  # Create instance: ila_2, and set properties
+  set ila_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_2 ]
+  set_property -dict [list \
+    CONFIG.C_MONITOR_TYPE {Native} \
+    CONFIG.C_NUM_OF_PROBES {5} \
+  ] $ila_2
+
+
+  # Create instance: i2s_receiver_0, and set properties
+  set i2s_receiver_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:i2s_receiver:1.0 i2s_receiver_0 ]
+  set_property CONFIG.C_32BIT_LR {1} $i2s_receiver_0
+
+
+  # Create instance: i2s_transmitter_0, and set properties
+  set i2s_transmitter_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:i2s_transmitter:1.0 i2s_transmitter_0 ]
+  set_property -dict [list \
+    CONFIG.C_32BIT_LR {1} \
+    CONFIG.C_IS_MASTER {0} \
+  ] $i2s_transmitter_0
+
+
+  # Create instance: ps7_0_axi_periph, and set properties
+  set ps7_0_axi_periph [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 ps7_0_axi_periph ]
+  set_property CONFIG.NUM_MI {9} $ps7_0_axi_periph
+
+
+  # Create instance: xlconcat_0, and set properties
+  set xlconcat_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 xlconcat_0 ]
 
   # Create instance: xfft_0, and set properties
   set xfft_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xfft:9.1 xfft_0 ]
   set_property -dict [list \
+    CONFIG.aresetn {true} \
     CONFIG.implementation_options {pipelined_streaming_io} \
     CONFIG.input_width {24} \
     CONFIG.number_of_stages_using_block_ram_for_data_and_phase_factors {3} \
     CONFIG.output_ordering {natural_order} \
+    CONFIG.phase_factor_width {18} \
     CONFIG.rounding_modes {convergent_rounding} \
     CONFIG.scaling_options {unscaled} \
     CONFIG.target_clock_frequency {125} \
     CONFIG.transform_length {1024} \
   ] $xfft_0
 
-
-  # Create instance: xfft_1, and set properties
-  set xfft_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xfft:9.1 xfft_1 ]
-  set_property -dict [list \
-    CONFIG.implementation_options {pipelined_streaming_io} \
-    CONFIG.input_width {34} \
-    CONFIG.number_of_stages_using_block_ram_for_data_and_phase_factors {3} \
-    CONFIG.output_ordering {natural_order} \
-    CONFIG.rounding_modes {convergent_rounding} \
-    CONFIG.scaling_options {scaled} \
-    CONFIG.target_clock_frequency {125} \
-    CONFIG.transform_length {1024} \
-  ] $xfft_1
-
-
-  # Create instance: xfft_2, and set properties
-  set xfft_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xfft:9.1 xfft_2 ]
-  set_property -dict [list \
-    CONFIG.channels {1} \
-    CONFIG.data_format {fixed_point} \
-    CONFIG.implementation_options {pipelined_streaming_io} \
-    CONFIG.input_width {24} \
-    CONFIG.number_of_stages_using_block_ram_for_data_and_phase_factors {3} \
-    CONFIG.output_ordering {natural_order} \
-    CONFIG.rounding_modes {convergent_rounding} \
-    CONFIG.scaling_options {unscaled} \
-    CONFIG.target_clock_frequency {125} \
-    CONFIG.target_data_throughput {50} \
-    CONFIG.transform_length {1024} \
-  ] $xfft_2
-
-
-  # Create instance: xlconcat_0, and set properties
-  set xlconcat_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconcat:2.1 xlconcat_0 ]
-
-  # Create instance: xlconstant_0, and set properties
-  set xlconstant_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_0 ]
 
   # Create instance: xlconstant_1, and set properties
   set xlconstant_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_1 ]
@@ -762,6 +676,22 @@ proc create_root_design { parentCell } {
     CONFIG.CONST_VAL {1} \
     CONFIG.CONST_WIDTH {1} \
   ] $xlconstant_2
+
+
+  # Create instance: xfft_1, and set properties
+  set xfft_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xfft:9.1 xfft_1 ]
+  set_property -dict [list \
+    CONFIG.aresetn {true} \
+    CONFIG.implementation_options {pipelined_streaming_io} \
+    CONFIG.input_width {34} \
+    CONFIG.number_of_stages_using_block_ram_for_data_and_phase_factors {3} \
+    CONFIG.output_ordering {natural_order} \
+    CONFIG.phase_factor_width {18} \
+    CONFIG.rounding_modes {convergent_rounding} \
+    CONFIG.scaling_options {scaled} \
+    CONFIG.target_clock_frequency {125} \
+    CONFIG.transform_length {1024} \
+  ] $xfft_1
 
 
   # Create instance: xlconstant_3, and set properties
@@ -780,6 +710,25 @@ proc create_root_design { parentCell } {
   ] $xlconstant_4
 
 
+  # Create instance: xfft_2, and set properties
+  set xfft_2 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xfft:9.1 xfft_2 ]
+  set_property -dict [list \
+    CONFIG.aresetn {true} \
+    CONFIG.channels {1} \
+    CONFIG.data_format {fixed_point} \
+    CONFIG.implementation_options {pipelined_streaming_io} \
+    CONFIG.input_width {24} \
+    CONFIG.number_of_stages_using_block_ram_for_data_and_phase_factors {3} \
+    CONFIG.output_ordering {natural_order} \
+    CONFIG.phase_factor_width {18} \
+    CONFIG.rounding_modes {convergent_rounding} \
+    CONFIG.scaling_options {unscaled} \
+    CONFIG.target_clock_frequency {125} \
+    CONFIG.target_data_throughput {50} \
+    CONFIG.transform_length {1024} \
+  ] $xfft_2
+
+
   # Create instance: xlconstant_5, and set properties
   set xlconstant_5 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 xlconstant_5 ]
   set_property -dict [list \
@@ -796,75 +745,295 @@ proc create_root_design { parentCell } {
   ] $xlconstant_6
 
 
+  # Create instance: ila_0, and set properties
+  set ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_0 ]
+  set_property -dict [list \
+    CONFIG.C_ENABLE_ILA_AXI_MON {true} \
+    CONFIG.C_MONITOR_TYPE {AXI} \
+    CONFIG.C_NUM_OF_PROBES {9} \
+    CONFIG.C_SLOT_0_AXI_PROTOCOL {AXI4S} \
+  ] $ila_0
+
+
+  # Create instance: ila_5, and set properties
+  set ila_5 [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_5 ]
+  set_property -dict [list \
+    CONFIG.C_ENABLE_ILA_AXI_MON {true} \
+    CONFIG.C_MONITOR_TYPE {AXI} \
+    CONFIG.C_NUM_OF_PROBES {9} \
+    CONFIG.C_SLOT_0_AXI_PROTOCOL {AXI4S} \
+  ] $ila_5
+
+
+  # Create instance: axis_data_fifo_0, and set properties
+  set axis_data_fifo_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_0 ]
+  set_property -dict [list \
+    CONFIG.FIFO_DEPTH {2048} \
+    CONFIG.HAS_WR_DATA_COUNT {1} \
+  ] $axis_data_fifo_0
+
+
+  # Create instance: system_ila_0, and set properties
+  set system_ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 system_ila_0 ]
+  set_property -dict [list \
+    CONFIG.C_MON_TYPE {INTERFACE} \
+    CONFIG.C_NUM_MONITOR_SLOTS {6} \
+    CONFIG.C_SLOT {5} \
+    CONFIG.C_SLOT_0_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+    CONFIG.C_SLOT_1_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+    CONFIG.C_SLOT_2_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+    CONFIG.C_SLOT_3_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+    CONFIG.C_SLOT_4_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+    CONFIG.C_SLOT_5_INTF_TYPE {xilinx.com:interface:axis_rtl:1.0} \
+  ] $system_ila_0
+
+
+  # Create instance: axis_data_fifo_1, and set properties
+  set axis_data_fifo_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_data_fifo:2.0 axis_data_fifo_1 ]
+  set_property -dict [list \
+    CONFIG.FIFO_DEPTH {2048} \
+    CONFIG.HAS_WR_DATA_COUNT {1} \
+  ] $axis_data_fifo_1
+
+
+  # Create instance: axis_broadcaster_0, and set properties
+  set axis_broadcaster_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axis_broadcaster:1.1 axis_broadcaster_0 ]
+  set_property -dict [list \
+    CONFIG.HAS_TREADY {1} \
+    CONFIG.M00_TDATA_REMAP {tdata[47:0]} \
+    CONFIG.M00_TUSER_REMAP {tuser[1:0]} \
+    CONFIG.M01_TDATA_REMAP {tdata[47:0]} \
+    CONFIG.M01_TUSER_REMAP {tuser[1:0]} \
+    CONFIG.M_TDATA_NUM_BYTES {6} \
+    CONFIG.M_TUSER_WIDTH {2} \
+    CONFIG.S_TDATA_NUM_BYTES {6} \
+    CONFIG.S_TUSER_WIDTH {2} \
+  ] $axis_broadcaster_0
+
+  set_property -dict [list \
+    CONFIG.HAS_TREADY.VALUE_MODE {auto} \
+    CONFIG.M_TDATA_NUM_BYTES.VALUE_MODE {auto} \
+    CONFIG.M_TUSER_WIDTH.VALUE_MODE {auto} \
+    CONFIG.S_TDATA_NUM_BYTES.VALUE_MODE {auto} \
+    CONFIG.S_TUSER_WIDTH.VALUE_MODE {auto} \
+  ] $axis_broadcaster_0
+
+
+  # Create instance: ila_fifo, and set properties
+  set ila_fifo [ create_bd_cell -type ip -vlnv xilinx.com:ip:ila:6.2 ila_fifo ]
+  set_property -dict [list \
+    CONFIG.C_DATA_DEPTH {1024} \
+    CONFIG.C_ENABLE_ILA_AXI_MON {false} \
+    CONFIG.C_MONITOR_TYPE {Native} \
+    CONFIG.C_NUM_OF_PROBES {2} \
+    CONFIG.C_PROBE0_WIDTH {32} \
+    CONFIG.C_PROBE1_WIDTH {32} \
+    CONFIG.C_PROBE2_WIDTH {1} \
+  ] $ila_fifo
+
+
+  # Create instance: fft_2_i2s_0, and set properties
+  set fft_2_i2s_0 [ create_bd_cell -type ip -vlnv aj:ajlib:fft_2_i2s:1.0 fft_2_i2s_0 ]
+
+  # Create instance: fft_mirror_replace_0, and set properties
+  set fft_mirror_replace_0 [ create_bd_cell -type ip -vlnv aj:ajlib:fft_mirror_replace:1.0 fft_mirror_replace_0 ]
+
+  # Create instance: fft_mirror_replace_1, and set properties
+  set fft_mirror_replace_1 [ create_bd_cell -type ip -vlnv aj:ajlib:fft_mirror_replace:1.0 fft_mirror_replace_1 ]
+
+  # Create instance: i2s_2_fft_0, and set properties
+  set i2s_2_fft_0 [ create_bd_cell -type ip -vlnv aj:ajlib:i2s_2_fft:1.0 i2s_2_fft_0 ]
+
+  # Create instance: overlap_add_1, and set properties
+  set overlap_add_1 [ create_bd_cell -type ip -vlnv aj:ajlib:overlap_add:1.0 overlap_add_1 ]
+
+  # Create instance: partition_buffer_0, and set properties
+  set partition_buffer_0 [ create_bd_cell -type ip -vlnv aj:ajlib:partition_buffer:1.0 partition_buffer_0 ]
+
+  # Create instance: partition_buffer_2, and set properties
+  set partition_buffer_2 [ create_bd_cell -type ip -vlnv aj:ajlib:partition_buffer:1.0 partition_buffer_2 ]
+
+  # Create instance: spectral_convolve_0, and set properties
+  set spectral_convolve_0 [ create_bd_cell -type ip -vlnv aj:ajlib:spectral_convolve:1.0 spectral_convolve_0 ]
+
   # Create interface connections
-  connect_bd_intf_net -intf_net axis_broadcaster_0_M00_AXIS [get_bd_intf_pins axis_broadcaster_0/M00_AXIS] [get_bd_intf_pins fft_2_i2s_0/inL]
-  connect_bd_intf_net -intf_net axis_broadcaster_0_M01_AXIS [get_bd_intf_pins axis_broadcaster_0/M01_AXIS] [get_bd_intf_pins fft_2_i2s_0/inR]
+  connect_bd_intf_net -intf_net axis_broadcaster_0_M00_AXIS [get_bd_intf_pins fft_2_i2s_0/inL] [get_bd_intf_pins axis_broadcaster_0/M00_AXIS]
+  connect_bd_intf_net -intf_net axis_broadcaster_0_M01_AXIS [get_bd_intf_pins fft_2_i2s_0/inR] [get_bd_intf_pins axis_broadcaster_0/M01_AXIS]
   connect_bd_intf_net -intf_net axis_data_fifo_0_M_AXIS [get_bd_intf_pins axis_data_fifo_0/M_AXIS] [get_bd_intf_pins xfft_0/S_AXIS_DATA]
 connect_bd_intf_net -intf_net [get_bd_intf_nets axis_data_fifo_0_M_AXIS] [get_bd_intf_pins axis_data_fifo_0/M_AXIS] [get_bd_intf_pins system_ila_0/SLOT_2_AXIS]
   connect_bd_intf_net -intf_net axis_data_fifo_1_M_AXIS [get_bd_intf_pins axis_data_fifo_1/M_AXIS] [get_bd_intf_pins xfft_2/S_AXIS_DATA]
-  connect_bd_intf_net -intf_net axis_data_fifo_2_M_AXIS [get_bd_intf_pins axis_data_fifo_2/M_AXIS] [get_bd_intf_pins xfft_1/S_AXIS_DATA]
-connect_bd_intf_net -intf_net [get_bd_intf_nets axis_data_fifo_2_M_AXIS] [get_bd_intf_pins axis_data_fifo_2/M_AXIS] [get_bd_intf_pins system_ila_0/SLOT_4_AXIS]
-  connect_bd_intf_net -intf_net complex_multiply_1_out_r [get_bd_intf_pins axis_data_fifo_2/S_AXIS] [get_bd_intf_pins complex_multiply_1/out_r]
   connect_bd_intf_net -intf_net fft_2_i2s_0_out_r [get_bd_intf_pins fft_2_i2s_0/out_r] [get_bd_intf_pins i2s_transmitter_0/s_axis_aud]
 connect_bd_intf_net -intf_net [get_bd_intf_nets fft_2_i2s_0_out_r] [get_bd_intf_pins fft_2_i2s_0/out_r] [get_bd_intf_pins ila_5/SLOT_0_AXIS]
-  connect_bd_intf_net -intf_net i2s_2_fft_0_outL [get_bd_intf_pins i2s_2_fft_0/outL] [get_bd_intf_pins partition_buffer_2/in_r]
+  connect_bd_intf_net -intf_net fft_mirror_replace_0_out_r [get_bd_intf_pins spectral_convolve_0/inX] [get_bd_intf_pins fft_mirror_replace_0/out_r]
+  connect_bd_intf_net -intf_net fft_mirror_replace_1_out_r [get_bd_intf_pins spectral_convolve_0/inH] [get_bd_intf_pins fft_mirror_replace_1/out_r]
+connect_bd_intf_net -intf_net [get_bd_intf_nets fft_mirror_replace_1_out_r] [get_bd_intf_pins spectral_convolve_0/inH] [get_bd_intf_pins system_ila_0/SLOT_1_AXIS]
+  connect_bd_intf_net -intf_net i2s_2_fft_0_outL [get_bd_intf_pins partition_buffer_2/in_r] [get_bd_intf_pins i2s_2_fft_0/outL]
 connect_bd_intf_net -intf_net [get_bd_intf_nets i2s_2_fft_0_outL] [get_bd_intf_pins partition_buffer_2/in_r] [get_bd_intf_pins system_ila_0/SLOT_0_AXIS]
-  connect_bd_intf_net -intf_net i2s_2_fft_0_outR [get_bd_intf_pins i2s_2_fft_0/outR] [get_bd_intf_pins partition_buffer_0/in_r]
+  connect_bd_intf_net -intf_net i2s_2_fft_0_outR [get_bd_intf_pins partition_buffer_0/in_r] [get_bd_intf_pins i2s_2_fft_0/outR]
   connect_bd_intf_net -intf_net i2s_receiver_0_m_axis_aud [get_bd_intf_pins i2s_2_fft_0/in_r] [get_bd_intf_pins i2s_receiver_0/m_axis_aud]
 connect_bd_intf_net -intf_net [get_bd_intf_nets i2s_receiver_0_m_axis_aud] [get_bd_intf_pins i2s_2_fft_0/in_r] [get_bd_intf_pins ila_0/SLOT_0_AXIS]
-  connect_bd_intf_net -intf_net overlap_add_0_out_r [get_bd_intf_pins axis_broadcaster_0/S_AXIS] [get_bd_intf_pins overlap_add_1/out_r]
-connect_bd_intf_net -intf_net [get_bd_intf_nets overlap_add_0_out_r] [get_bd_intf_pins axis_broadcaster_0/S_AXIS] [get_bd_intf_pins system_ila_0/SLOT_5_AXIS]
-  connect_bd_intf_net -intf_net partition_buffer_0_out_r [get_bd_intf_pins axis_data_fifo_0/S_AXIS] [get_bd_intf_pins partition_buffer_0/out_r]
-  connect_bd_intf_net -intf_net partition_buffer_2_out_r [get_bd_intf_pins axis_data_fifo_1/S_AXIS] [get_bd_intf_pins partition_buffer_2/out_r]
+  connect_bd_intf_net -intf_net overlap_add_0_out_r [get_bd_intf_pins overlap_add_1/out_r] [get_bd_intf_pins axis_broadcaster_0/S_AXIS]
+connect_bd_intf_net -intf_net [get_bd_intf_nets overlap_add_0_out_r] [get_bd_intf_pins overlap_add_1/out_r] [get_bd_intf_pins system_ila_0/SLOT_5_AXIS]
+  connect_bd_intf_net -intf_net partition_buffer_0_out_r [get_bd_intf_pins partition_buffer_0/out_r] [get_bd_intf_pins axis_data_fifo_0/S_AXIS]
+  connect_bd_intf_net -intf_net partition_buffer_2_out_r [get_bd_intf_pins partition_buffer_2/out_r] [get_bd_intf_pins axis_data_fifo_1/S_AXIS]
   connect_bd_intf_net -intf_net processing_system7_0_DDR [get_bd_intf_ports DDR] [get_bd_intf_pins processing_system7_0/DDR]
   connect_bd_intf_net -intf_net processing_system7_0_FIXED_IO [get_bd_intf_ports FIXED_IO] [get_bd_intf_pins processing_system7_0/FIXED_IO]
   connect_bd_intf_net -intf_net processing_system7_0_IIC_0 [get_bd_intf_ports IIC_0_0] [get_bd_intf_pins processing_system7_0/IIC_0]
   connect_bd_intf_net -intf_net processing_system7_0_M_AXI_GP0 [get_bd_intf_pins processing_system7_0/M_AXI_GP0] [get_bd_intf_pins ps7_0_axi_periph/S00_AXI]
-  connect_bd_intf_net -intf_net ps7_0_axi_periph_M00_AXI [get_bd_intf_pins i2s_receiver_0/s_axi_ctrl] [get_bd_intf_pins ps7_0_axi_periph/M00_AXI]
-  connect_bd_intf_net -intf_net ps7_0_axi_periph_M01_AXI [get_bd_intf_pins i2s_transmitter_0/s_axi_ctrl] [get_bd_intf_pins ps7_0_axi_periph/M01_AXI]
+  connect_bd_intf_net -intf_net ps7_0_axi_periph_M00_AXI [get_bd_intf_pins ps7_0_axi_periph/M00_AXI] [get_bd_intf_pins i2s_receiver_0/s_axi_ctrl]
+  connect_bd_intf_net -intf_net ps7_0_axi_periph_M01_AXI [get_bd_intf_pins ps7_0_axi_periph/M01_AXI] [get_bd_intf_pins i2s_transmitter_0/s_axi_ctrl]
   connect_bd_intf_net -intf_net ps7_0_axi_periph_M02_AXI [get_bd_intf_pins i2s_2_fft_0/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M02_AXI]
-  connect_bd_intf_net -intf_net ps7_0_axi_periph_M03_AXI [get_bd_intf_pins fft_2_i2s_0/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M03_AXI]
-  connect_bd_intf_net -intf_net ps7_0_axi_periph_M04_AXI [get_bd_intf_pins complex_multiply_1/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M04_AXI]
+  connect_bd_intf_net -intf_net ps7_0_axi_periph_M03_AXI [get_bd_intf_pins ps7_0_axi_periph/M03_AXI] [get_bd_intf_pins fft_mirror_replace_1/s_axi_control]
+  connect_bd_intf_net -intf_net ps7_0_axi_periph_M04_AXI [get_bd_intf_pins spectral_convolve_0/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M04_AXI]
   connect_bd_intf_net -intf_net ps7_0_axi_periph_M05_AXI [get_bd_intf_pins overlap_add_1/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M05_AXI]
   connect_bd_intf_net -intf_net ps7_0_axi_periph_M06_AXI [get_bd_intf_pins partition_buffer_0/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M06_AXI]
   connect_bd_intf_net -intf_net ps7_0_axi_periph_M07_AXI [get_bd_intf_pins partition_buffer_2/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M07_AXI]
-  connect_bd_intf_net -intf_net xfft_0_M_AXIS_DATA [get_bd_intf_pins complex_multiply_1/inX] [get_bd_intf_pins xfft_0/M_AXIS_DATA]
-connect_bd_intf_net -intf_net [get_bd_intf_nets xfft_0_M_AXIS_DATA] [get_bd_intf_pins system_ila_0/SLOT_3_AXIS] [get_bd_intf_pins xfft_0/M_AXIS_DATA]
+  connect_bd_intf_net -intf_net ps7_0_axi_periph_M08_AXI [get_bd_intf_pins fft_mirror_replace_0/s_axi_control] [get_bd_intf_pins ps7_0_axi_periph/M08_AXI]
+  connect_bd_intf_net -intf_net spectral_convolve_0_out_r [get_bd_intf_pins spectral_convolve_0/out_r] [get_bd_intf_pins xfft_1/S_AXIS_DATA]
+connect_bd_intf_net -intf_net [get_bd_intf_nets spectral_convolve_0_out_r] [get_bd_intf_pins spectral_convolve_0/out_r] [get_bd_intf_pins system_ila_0/SLOT_4_AXIS]
+  connect_bd_intf_net -intf_net xfft_0_M_AXIS_DATA [get_bd_intf_pins fft_mirror_replace_1/in_r] [get_bd_intf_pins xfft_0/M_AXIS_DATA]
+connect_bd_intf_net -intf_net [get_bd_intf_nets xfft_0_M_AXIS_DATA] [get_bd_intf_pins fft_mirror_replace_1/in_r] [get_bd_intf_pins system_ila_0/SLOT_3_AXIS]
   connect_bd_intf_net -intf_net xfft_1_M_AXIS_DATA [get_bd_intf_pins overlap_add_1/in_r] [get_bd_intf_pins xfft_1/M_AXIS_DATA]
-  connect_bd_intf_net -intf_net xfft_2_M_AXIS_DATA [get_bd_intf_pins complex_multiply_1/inH] [get_bd_intf_pins xfft_2/M_AXIS_DATA]
+  connect_bd_intf_net -intf_net xfft_2_M_AXIS_DATA [get_bd_intf_pins fft_mirror_replace_0/in_r] [get_bd_intf_pins xfft_2/M_AXIS_DATA]
 
   # Create port connections
-  connect_bd_net -net clk_in_1 [get_bd_ports clk_in] [get_bd_pins clk_wiz_0/clk_in1]
-  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins axis_broadcaster_0/aclk] [get_bd_pins axis_data_fifo_0/s_axis_aclk] [get_bd_pins axis_data_fifo_1/s_axis_aclk] [get_bd_pins axis_data_fifo_2/s_axis_aclk] [get_bd_pins clk_wiz_0/clk_out1] [get_bd_pins clk_wiz_1/clk_in1] [get_bd_pins complex_multiply_1/ap_clk] [get_bd_pins fft_2_i2s_0/ap_clk] [get_bd_pins i2s_2_fft_0/ap_clk] [get_bd_pins i2s_receiver_0/m_axis_aud_aclk] [get_bd_pins i2s_receiver_0/s_axi_ctrl_aclk] [get_bd_pins i2s_transmitter_0/s_axi_ctrl_aclk] [get_bd_pins i2s_transmitter_0/s_axis_aud_aclk] [get_bd_pins ila_0/clk] [get_bd_pins ila_2/clk] [get_bd_pins ila_5/clk] [get_bd_pins overlap_add_1/ap_clk] [get_bd_pins partition_buffer_0/ap_clk] [get_bd_pins partition_buffer_2/ap_clk] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK] [get_bd_pins ps7_0_axi_periph/ACLK] [get_bd_pins ps7_0_axi_periph/M00_ACLK] [get_bd_pins ps7_0_axi_periph/M01_ACLK] [get_bd_pins ps7_0_axi_periph/M02_ACLK] [get_bd_pins ps7_0_axi_periph/M03_ACLK] [get_bd_pins ps7_0_axi_periph/M04_ACLK] [get_bd_pins ps7_0_axi_periph/M05_ACLK] [get_bd_pins ps7_0_axi_periph/M06_ACLK] [get_bd_pins ps7_0_axi_periph/M07_ACLK] [get_bd_pins ps7_0_axi_periph/S00_ACLK] [get_bd_pins rst_clk_wiz_0_122M/slowest_sync_clk] [get_bd_pins system_ila_0/clk] [get_bd_pins xfft_0/aclk] [get_bd_pins xfft_1/aclk] [get_bd_pins xfft_2/aclk]
-  connect_bd_net -net clk_wiz_1_mclk [get_bd_ports mclk_0] [get_bd_pins clk_wiz_1/mclk] [get_bd_pins i2s_receiver_0/aud_mclk] [get_bd_pins i2s_transmitter_0/aud_mclk] [get_bd_pins ila_2/probe0] [get_bd_pins proc_sys_reset_0/slowest_sync_clk]
-  connect_bd_net -net i2s_receiver_0_irq [get_bd_pins i2s_receiver_0/irq] [get_bd_pins xlconcat_0/In0]
-  connect_bd_net -net i2s_receiver_0_lrclk_out [get_bd_ports lrclk_out_0] [get_bd_ports lrclk_out_1] [get_bd_pins i2s_receiver_0/lrclk_out] [get_bd_pins i2s_transmitter_0/lrclk_in] [get_bd_pins ila_2/probe1]
-  connect_bd_net -net i2s_receiver_0_sclk_out [get_bd_ports sclk_out_0] [get_bd_pins i2s_receiver_0/sclk_out] [get_bd_pins i2s_transmitter_0/sclk_in] [get_bd_pins ila_2/probe2]
-  connect_bd_net -net i2s_transmitter_0_irq [get_bd_pins i2s_transmitter_0/irq] [get_bd_pins xlconcat_0/In1]
-  connect_bd_net -net i2s_transmitter_0_sdata_0_out [get_bd_ports sdata_0_out_0] [get_bd_pins i2s_transmitter_0/sdata_0_out] [get_bd_pins ila_2/probe4]
-  connect_bd_net -net proc_sys_reset_0_peripheral_reset [get_bd_pins i2s_receiver_0/aud_mrst] [get_bd_pins i2s_transmitter_0/aud_mrst] [get_bd_pins proc_sys_reset_0/peripheral_reset]
-  connect_bd_net -net processing_system7_0_FCLK_RESET0_N [get_bd_pins proc_sys_reset_0/ext_reset_in] [get_bd_pins processing_system7_0/FCLK_RESET0_N] [get_bd_pins rst_clk_wiz_0_122M/ext_reset_in]
-  connect_bd_net -net rst_clk_wiz_0_122M_peripheral_aresetn [get_bd_pins axis_broadcaster_0/aresetn] [get_bd_pins axis_data_fifo_0/s_axis_aresetn] [get_bd_pins axis_data_fifo_1/s_axis_aresetn] [get_bd_pins axis_data_fifo_2/s_axis_aresetn] [get_bd_pins complex_multiply_1/ap_rst_n] [get_bd_pins fft_2_i2s_0/ap_rst_n] [get_bd_pins i2s_2_fft_0/ap_rst_n] [get_bd_pins i2s_receiver_0/m_axis_aud_aresetn] [get_bd_pins i2s_receiver_0/s_axi_ctrl_aresetn] [get_bd_pins i2s_transmitter_0/s_axi_ctrl_aresetn] [get_bd_pins i2s_transmitter_0/s_axis_aud_aresetn] [get_bd_pins overlap_add_1/ap_rst_n] [get_bd_pins partition_buffer_0/ap_rst_n] [get_bd_pins partition_buffer_2/ap_rst_n] [get_bd_pins ps7_0_axi_periph/ARESETN] [get_bd_pins ps7_0_axi_periph/M00_ARESETN] [get_bd_pins ps7_0_axi_periph/M01_ARESETN] [get_bd_pins ps7_0_axi_periph/M02_ARESETN] [get_bd_pins ps7_0_axi_periph/M03_ARESETN] [get_bd_pins ps7_0_axi_periph/M04_ARESETN] [get_bd_pins ps7_0_axi_periph/M05_ARESETN] [get_bd_pins ps7_0_axi_periph/M06_ARESETN] [get_bd_pins ps7_0_axi_periph/M07_ARESETN] [get_bd_pins ps7_0_axi_periph/S00_ARESETN] [get_bd_pins rst_clk_wiz_0_122M/peripheral_aresetn] [get_bd_pins system_ila_0/resetn]
-  connect_bd_net -net sdata_0_in_0_1 [get_bd_ports sdata_0_in_0] [get_bd_pins i2s_receiver_0/sdata_0_in] [get_bd_pins ila_2/probe3]
+  connect_bd_net -net axis_data_fifo_0_axis_wr_data_count  [get_bd_pins axis_data_fifo_0/axis_wr_data_count] \
+  [get_bd_pins ila_fifo/probe0]
+  connect_bd_net -net axis_data_fifo_1_axis_wr_data_count  [get_bd_pins axis_data_fifo_1/axis_wr_data_count] \
+  [get_bd_pins ila_fifo/probe1]
+  connect_bd_net -net clk_in_1  [get_bd_ports clk_in] \
+  [get_bd_pins clk_wiz_0/clk_in1]
+  connect_bd_net -net clk_wiz_0_clk_pl  [get_bd_pins clk_wiz_0/clk_pl] \
+  [get_bd_pins axis_broadcaster_0/aclk] \
+  [get_bd_pins axis_data_fifo_0/s_axis_aclk] \
+  [get_bd_pins axis_data_fifo_1/s_axis_aclk] \
+  [get_bd_pins i2s_receiver_0/s_axi_ctrl_aclk] \
+  [get_bd_pins i2s_receiver_0/m_axis_aud_aclk] \
+  [get_bd_pins i2s_transmitter_0/s_axi_ctrl_aclk] \
+  [get_bd_pins i2s_transmitter_0/s_axis_aud_aclk] \
+  [get_bd_pins ila_0/clk] \
+  [get_bd_pins ila_2/clk] \
+  [get_bd_pins ila_5/clk] \
+  [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK] \
+  [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/ACLK] \
+  [get_bd_pins ps7_0_axi_periph/S00_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M00_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M01_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M02_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M03_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M04_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M05_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M06_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M07_ACLK] \
+  [get_bd_pins ps7_0_axi_periph/M08_ACLK] \
+  [get_bd_pins rst_clk_wiz_0_122M/slowest_sync_clk] \
+  [get_bd_pins system_ila_0/clk] \
+  [get_bd_pins xfft_0/aclk] \
+  [get_bd_pins xfft_1/aclk] \
+  [get_bd_pins xfft_2/aclk] \
+  [get_bd_pins ila_fifo/clk] \
+  [get_bd_pins fft_2_i2s_0/ap_clk] \
+  [get_bd_pins fft_mirror_replace_0/ap_clk] \
+  [get_bd_pins fft_mirror_replace_1/ap_clk] \
+  [get_bd_pins i2s_2_fft_0/ap_clk] \
+  [get_bd_pins overlap_add_1/ap_clk] \
+  [get_bd_pins partition_buffer_0/ap_clk] \
+  [get_bd_pins partition_buffer_2/ap_clk] \
+  [get_bd_pins spectral_convolve_0/ap_clk]
+  connect_bd_net -net clk_wiz_0_locked  [get_bd_pins clk_wiz_0/locked] \
+  [get_bd_pins rst_clk_wiz_0_122M/dcm_locked] \
+  [get_bd_pins proc_sys_reset_0/dcm_locked]
+  connect_bd_net -net clk_wiz_0_mclk  [get_bd_pins clk_wiz_0/mclk] \
+  [get_bd_pins i2s_receiver_0/aud_mclk] \
+  [get_bd_pins i2s_transmitter_0/aud_mclk] \
+  [get_bd_pins ila_2/probe0] \
+  [get_bd_pins proc_sys_reset_0/slowest_sync_clk] \
+  [get_bd_ports mclk_0]
+  connect_bd_net -net i2s_receiver_0_irq  [get_bd_pins i2s_receiver_0/irq] \
+  [get_bd_pins xlconcat_0/In0]
+  connect_bd_net -net i2s_receiver_0_lrclk_out  [get_bd_pins i2s_receiver_0/lrclk_out] \
+  [get_bd_ports lrclk_out_0] \
+  [get_bd_ports lrclk_out_1] \
+  [get_bd_pins i2s_transmitter_0/lrclk_in] \
+  [get_bd_pins ila_2/probe1]
+  connect_bd_net -net i2s_receiver_0_sclk_out  [get_bd_pins i2s_receiver_0/sclk_out] \
+  [get_bd_ports sclk_out_0] \
+  [get_bd_pins i2s_transmitter_0/sclk_in] \
+  [get_bd_pins ila_2/probe2]
+  connect_bd_net -net i2s_transmitter_0_irq  [get_bd_pins i2s_transmitter_0/irq] \
+  [get_bd_pins xlconcat_0/In1]
+  connect_bd_net -net i2s_transmitter_0_sdata_0_out  [get_bd_pins i2s_transmitter_0/sdata_0_out] \
+  [get_bd_ports sdata_0_out_0] \
+  [get_bd_pins ila_2/probe4]
+  connect_bd_net -net proc_sys_reset_0_peripheral_reset  [get_bd_pins proc_sys_reset_0/peripheral_reset] \
+  [get_bd_pins i2s_receiver_0/aud_mrst] \
+  [get_bd_pins i2s_transmitter_0/aud_mrst]
+  connect_bd_net -net processing_system7_0_FCLK_RESET0_N  [get_bd_pins processing_system7_0/FCLK_RESET0_N] \
+  [get_bd_pins proc_sys_reset_0/ext_reset_in] \
+  [get_bd_pins rst_clk_wiz_0_122M/ext_reset_in]
+  connect_bd_net -net rst_clk_wiz_0_122M_peripheral_aresetn  [get_bd_pins rst_clk_wiz_0_122M/peripheral_aresetn] \
+  [get_bd_pins axis_broadcaster_0/aresetn] \
+  [get_bd_pins axis_data_fifo_0/s_axis_aresetn] \
+  [get_bd_pins axis_data_fifo_1/s_axis_aresetn] \
+  [get_bd_pins i2s_receiver_0/s_axi_ctrl_aresetn] \
+  [get_bd_pins i2s_receiver_0/m_axis_aud_aresetn] \
+  [get_bd_pins i2s_transmitter_0/s_axi_ctrl_aresetn] \
+  [get_bd_pins i2s_transmitter_0/s_axis_aud_aresetn] \
+  [get_bd_pins ps7_0_axi_periph/ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/S00_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M00_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M01_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M02_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M03_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M04_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M05_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M06_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M07_ARESETN] \
+  [get_bd_pins ps7_0_axi_periph/M08_ARESETN] \
+  [get_bd_pins system_ila_0/resetn] \
+  [get_bd_pins xfft_0/aresetn] \
+  [get_bd_pins xfft_1/aresetn] \
+  [get_bd_pins xfft_2/aresetn] \
+  [get_bd_pins fft_2_i2s_0/ap_rst_n] \
+  [get_bd_pins fft_mirror_replace_0/ap_rst_n] \
+  [get_bd_pins fft_mirror_replace_1/ap_rst_n] \
+  [get_bd_pins i2s_2_fft_0/ap_rst_n] \
+  [get_bd_pins overlap_add_1/ap_rst_n] \
+  [get_bd_pins partition_buffer_0/ap_rst_n] \
+  [get_bd_pins partition_buffer_2/ap_rst_n] \
+  [get_bd_pins spectral_convolve_0/ap_rst_n]
+  connect_bd_net -net sdata_0_in_0_1  [get_bd_ports sdata_0_in_0] \
+  [get_bd_pins i2s_receiver_0/sdata_0_in] \
+  [get_bd_pins ila_2/probe3]
   set_property HDL_ATTRIBUTE.DEBUG {true} [get_bd_nets sdata_0_in_0_1]
-  connect_bd_net -net xlconcat_0_dout [get_bd_pins processing_system7_0/IRQ_F2P] [get_bd_pins xlconcat_0/dout]
-  connect_bd_net -net xlconstant_0_dout [get_bd_ports dout_0] [get_bd_pins xlconstant_0/dout]
-  connect_bd_net -net xlconstant_1_dout [get_bd_pins xfft_0/s_axis_config_tdata] [get_bd_pins xlconstant_1/dout]
-  connect_bd_net -net xlconstant_2_dout [get_bd_pins xfft_0/s_axis_config_tvalid] [get_bd_pins xlconstant_2/dout]
-  connect_bd_net -net xlconstant_3_dout [get_bd_pins xfft_1/s_axis_config_tdata] [get_bd_pins xlconstant_3/dout]
-  connect_bd_net -net xlconstant_4_dout [get_bd_pins xfft_1/s_axis_config_tvalid] [get_bd_pins xlconstant_4/dout]
-  connect_bd_net -net xlconstant_5_dout [get_bd_pins xfft_2/s_axis_config_tdata] [get_bd_pins xlconstant_5/dout]
-  connect_bd_net -net xlconstant_6_dout [get_bd_pins xfft_2/s_axis_config_tvalid] [get_bd_pins xlconstant_6/dout]
+  connect_bd_net -net xlconcat_0_dout  [get_bd_pins xlconcat_0/dout] \
+  [get_bd_pins processing_system7_0/IRQ_F2P]
+  connect_bd_net -net xlconstant_0_dout  [get_bd_pins xlconstant_0/dout] \
+  [get_bd_ports dout_0]
+  connect_bd_net -net xlconstant_1_dout  [get_bd_pins xlconstant_1/dout] \
+  [get_bd_pins xfft_0/s_axis_config_tdata]
+  connect_bd_net -net xlconstant_2_dout  [get_bd_pins xlconstant_2/dout] \
+  [get_bd_pins xfft_0/s_axis_config_tvalid]
+  connect_bd_net -net xlconstant_3_dout  [get_bd_pins xlconstant_3/dout] \
+  [get_bd_pins xfft_1/s_axis_config_tdata]
+  connect_bd_net -net xlconstant_4_dout  [get_bd_pins xlconstant_4/dout] \
+  [get_bd_pins xfft_1/s_axis_config_tvalid]
+  connect_bd_net -net xlconstant_5_dout  [get_bd_pins xlconstant_5/dout] \
+  [get_bd_pins xfft_2/s_axis_config_tdata]
+  connect_bd_net -net xlconstant_6_dout  [get_bd_pins xlconstant_6/dout] \
+  [get_bd_pins xfft_2/s_axis_config_tvalid]
 
   # Create address segments
-  assign_bd_address -offset 0x40020000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs complex_multiply_1/s_axi_control/Reg] -force
-  assign_bd_address -offset 0x40010000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fft_2_i2s_0/s_axi_control/Reg] -force
+  assign_bd_address -offset 0x40060000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fft_mirror_replace_0/s_axi_control/Reg] -force
+  assign_bd_address -offset 0x40070000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs fft_mirror_replace_1/s_axi_control/Reg] -force
   assign_bd_address -offset 0x40000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs i2s_2_fft_0/s_axi_control/Reg] -force
   assign_bd_address -offset 0x44A00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs i2s_receiver_0/s_axi_ctrl/Reg] -force
   assign_bd_address -offset 0x43C00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs i2s_transmitter_0/s_axi_ctrl/Reg] -force
   assign_bd_address -offset 0x40030000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs overlap_add_1/s_axi_control/Reg] -force
   assign_bd_address -offset 0x40040000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs partition_buffer_0/s_axi_control/Reg] -force
   assign_bd_address -offset 0x40050000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs partition_buffer_2/s_axi_control/Reg] -force
+  assign_bd_address -offset 0x40020000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs spectral_convolve_0/s_axi_control/Reg] -force
 
 
   # Restore current instance

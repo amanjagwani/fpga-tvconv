@@ -1,7 +1,7 @@
 #include "partition.h"
 
-void partition_buffer(hls::stream<stream_fft> &in,
-                      hls::stream<stream_fft> &out,
+void partition_buffer(hls::stream<stream_audio> &in,
+                      hls::stream<stream_fft_fixed> &out,
                       uint16_t &partition_size)
 {
 #pragma HLS INTERFACE axis port = in
@@ -16,15 +16,17 @@ void partition_buffer(hls::stream<stream_fft> &in,
 
     for (ap_uint<16> i = 0; i < partition_size; i++)
     {
+#pragma HLS LOOP_TRIPCOUNT min = 1 max = 512
 #pragma HLS PIPELINE II = 1
-        stream_fft s = in.read();
+        stream_audio s = in.read();
         buffer[i] = s.data(23, 0);
     }
 
     for (ap_uint<16> i = 0; i < fft_size; i++)
     {
+#pragma HLS LOOP_TRIPCOUNT min = 1 max = 1024
 #pragma HLS PIPELINE II = 1
-        stream_fft o;
+        stream_fft_fixed o;
         o.data(23, 0) = (i < partition_size) ? buffer[i] : ap_int<24>(0);
         o.data(47, 24) = ap_int<24>(0);
         o.keep = -1;

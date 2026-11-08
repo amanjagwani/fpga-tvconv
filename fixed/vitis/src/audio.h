@@ -6,9 +6,6 @@
 #include "xil_printf.h"
 #include "sleep.h"
 
-/* Redefine audio controller base address from xparameters.h */
-#define AUDIO_BASE                XPAR_ZYBO_AUDIO_CTRL_0_BASEADDR
-
 /* Slave address for the SSM audio controller */
 #define IIC_SLAVE_ADDR            0b0011010
 
@@ -34,7 +31,7 @@ enum audio_regs {
 };
 
 /* Prototype Functions */
-unsigned char IicConfig(unsigned int DeviceIdPS);
+unsigned char IicConfig(UINTPTR BaseAddress);
 void AudioPllConfig();
 void AudioWriteToReg(u8 u8RegAddr, u16 u16Data);
 

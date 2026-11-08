@@ -1,19 +1,17 @@
 #include "spectral_convolve.h"
 
 void spectral_convolve(
-    hls::stream<stream_fft_in> &inX,
-    hls::stream<stream_fft_in> &inH,
-    hls::stream<stream_fft_out> &out,
+    hls::stream<stream_fft_wide> &inX,
+    hls::stream<stream_fft_wide> &inH,
+    hls::stream<stream_fft_wide> &out,
     uint16_t &fft_size,
-    uint16_t &num_partitions,
-    uint16_t &scaling_factor)
+    uint16_t &num_partitions)
 {
 #pragma HLS INTERFACE axis port = inX
 #pragma HLS INTERFACE axis port = inH
 #pragma HLS INTERFACE axis port = out
 #pragma HLS INTERFACE s_axilite port = fft_size
 #pragma HLS INTERFACE s_axilite port = num_partitions
-#pragma HLS INTERFACE s_axilite port = scaling_factor
 #pragma HLS INTERFACE ap_ctrl_none port = return
 
     static ap_int<FFT_OUTPUT_WIDTH> fdl_x_real[MAX_NUM_PARTITIONS][MAX_FFT_SIZE];
@@ -26,6 +24,7 @@ void spectral_convolve(
 #pragma HLS BIND_STORAGE variable = fdl_h_imag type = ram_2p impl = bram
 
     static ap_uint<16> write_ptr = 0;
+#pragma HLS RESET variable = write_ptr
 
     ap_int<74> acc_real[MAX_FFT_SIZE];
     ap_int<74> acc_imag[MAX_FFT_SIZE];
@@ -34,18 +33,18 @@ void spectral_convolve(
 
     ap_uint<16> K = num_partitions;
 
-ingest:
+collect:
     for (ap_uint<16> i = 0; i < fft_size; i++)
     {
 #pragma HLS LOOP_TRIPCOUNT min = 1 max = 1024
 #pragma HLS PIPELINE II = 1
-        stream_fft_in x = inX.read();
-        stream_fft_in h = inH.read();
+        stream_fft_wide s_x = inX.read();
+        stream_fft_wide s_h = inH.read();
 
-        fdl_x_real[write_ptr][i] = x.data(FFT_OUTPUT_WIDTH - 1, 0);
-        fdl_x_imag[write_ptr][i] = x.data(40 + FFT_OUTPUT_WIDTH - 1, 40);
-        fdl_h_real[write_ptr][i] = h.data(FFT_OUTPUT_WIDTH - 1, 0);
-        fdl_h_imag[write_ptr][i] = h.data(40 + FFT_OUTPUT_WIDTH - 1, 40);
+        fdl_x_real[write_ptr][i] = s_x.data(FFT_OUTPUT_WIDTH - 1, 0);
+        fdl_x_imag[write_ptr][i] = s_x.data(40 + FFT_OUTPUT_WIDTH - 1, 40);
+        fdl_h_real[write_ptr][i] = s_h.data(FFT_OUTPUT_WIDTH - 1, 0);
+        fdl_h_imag[write_ptr][i] = s_h.data(40 + FFT_OUTPUT_WIDTH - 1, 40);
     }
 
 zero_acc:
@@ -61,7 +60,6 @@ zero_acc:
     {
 #pragma HLS LOOP_TRIPCOUNT min = 1 max = 8
         ap_uint<16> x_idx = (write_ptr + K - p) % K;
-        ap_uint<16> h_idx = (write_ptr + 1 + p) % K;
 
     mac_inner:
         for (ap_uint<16> i = 0; i < fft_size; i++)
@@ -70,8 +68,8 @@ zero_acc:
 #pragma HLS PIPELINE II = 2
             ap_int<FFT_OUTPUT_WIDTH> xr = fdl_x_real[x_idx][i];
             ap_int<FFT_OUTPUT_WIDTH> xi = fdl_x_imag[x_idx][i];
-            ap_int<FFT_OUTPUT_WIDTH> hr = fdl_h_real[h_idx][i];
-            ap_int<FFT_OUTPUT_WIDTH> hi = fdl_h_imag[h_idx][i];
+            ap_int<FFT_OUTPUT_WIDTH> hr = fdl_h_real[p][i];   // fixed slot (Lazzarini 2020, eq. 13)
+            ap_int<FFT_OUTPUT_WIDTH> hi = fdl_h_imag[p][i];
 
             ap_int<71> prod_real = (ap_int<71>)(xr * hr) - (ap_int<71>)(xi * hi);
             ap_int<71> prod_imag = (ap_int<71>)(xr * hi) + (ap_int<71>)(xi * hr);
@@ -92,9 +90,9 @@ emit:
         ap_int<74> real_shifted = acc_real[i];
         ap_int<74> imag_shifted = acc_imag[i];
 
-        if (scaling_factor > 0)
+        if (SCALING_FACTOR > 0)
         {
-            ap_int<74> rounding_bit = (ap_int<74>(1) << (scaling_factor - 1));
+            ap_int<74> rounding_bit = (ap_int<74>(1) << (SCALING_FACTOR - 1));
             if (real_shifted >= 0)
                 real_shifted += rounding_bit;
             else
@@ -104,8 +102,8 @@ emit:
             else
                 imag_shifted -= rounding_bit;
         }
-        real_shifted >>= scaling_factor;
-        imag_shifted >>= scaling_factor;
+        real_shifted >>= SCALING_FACTOR;
+        imag_shifted >>= SCALING_FACTOR;
 
         ap_int<IFFT_INPUT_WIDTH> out_real_sat, out_imag_sat;
 
@@ -123,17 +121,17 @@ emit:
         else
             out_imag_sat = (ap_int<IFFT_INPUT_WIDTH>)imag_shifted;
 
-        stream_fft_out y;
-        y.data = 0;
-        y.data(IFFT_INPUT_WIDTH - 1, 0) = out_real_sat;
-        y.data(40 + IFFT_INPUT_WIDTH - 1, 40) = out_imag_sat;
-        y.last = (i == fft_size - 1) ? 1 : 0;
-        y.keep = -1;
-        y.strb = -1;
-        y.user = 0;
-        y.id = 0;
-        y.dest = 0;
-        out.write(y);
+        stream_fft_wide o;
+        o.data = 0;
+        o.data(IFFT_INPUT_WIDTH - 1, 0) = out_real_sat;
+        o.data(40 + IFFT_INPUT_WIDTH - 1, 40) = out_imag_sat;
+        o.last = (i == fft_size - 1) ? 1 : 0;
+        o.keep = -1;
+        o.strb = -1;
+        o.user = 0;
+        o.id = 0;
+        o.dest = 0;
+        out.write(o);
     }
 
     write_ptr = (write_ptr + 1) % K;

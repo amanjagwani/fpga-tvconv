@@ -3,12 +3,12 @@
 /* Global variable for the IIC */
 XIicPs Iic;
 
-unsigned char IicConfig(unsigned int DeviceIdPS)
+unsigned char IicConfig(UINTPTR BaseAddress)
 {
     XIicPs_Config *Config;
     int Status;
 
-    Config = XIicPs_LookupConfig(DeviceIdPS);
+    Config = XIicPs_LookupConfig(BaseAddress);
     if(NULL == Config) {
         return XST_FAILURE;
     }

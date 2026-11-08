@@ -1,45 +1,43 @@
 #include "fft_2_i2s.h"
 
-void fft_2_i2s(hls::stream<stream_fft> &inL,
-               hls::stream<stream_fft> &inR,
-               hls::stream<stream_i2s> &out,
-               uint16_t &fft_size)
+void fft_2_i2s(hls::stream<stream_audio> &inL,
+               hls::stream<stream_audio> &inR,
+               hls::stream<stream_i2s> &out)
 {
 #pragma HLS INTERFACE axis port = inL
 #pragma HLS INTERFACE axis port = inR
 #pragma HLS INTERFACE axis port = out
-#pragma HLS INTERFACE s_axilite port = fft_size
 #pragma HLS INTERFACE ap_ctrl_none port = return
 
     while (!inL.empty() && !inR.empty())
     {
 #pragma HLS LOOP_TRIPCOUNT 1
 
-        stream_fft in_sampleL = inL.read();
-        stream_fft in_sampleR = inR.read();
+        stream_audio s_l = inL.read();
+        stream_audio s_r = inR.read();
 
-        ap_int<24> real_dataL = in_sampleL.data(23, 0);
-        ap_int<24> real_dataR = in_sampleR.data(23, 0);
+        ap_int<24> data_l = s_l.data(23, 0);
+        ap_int<24> data_r = s_r.data(23, 0);
 
-        stream_i2s out_sampleL, out_sampleR;
+        stream_i2s o_l, o_r;
 
-        out_sampleL.data(27, 4) = real_dataL;
-        out_sampleL.data(3, 0) = 1;
-        out_sampleL.user = in_sampleL.user;
-        out_sampleL.id = 0; // Left channel
-        out_sampleL.keep = in_sampleL.keep;
-        out_sampleL.strb = in_sampleL.strb;
-        out_sampleL.last = 0;
+        o_l.data(27, 4) = data_l;
+        o_l.data(3, 0) = 1;
+        o_l.user = s_l.user;
+        o_l.id = 0;
+        o_l.keep = s_l.keep;
+        o_l.strb = s_l.strb;
+        o_l.last = 0;
 
-        out_sampleR.data(27, 4) = real_dataR;
-        out_sampleR.data(3, 0) = 2;
-        out_sampleR.user = in_sampleR.user;
-        out_sampleR.id = 1; // Right channel
-        out_sampleR.keep = in_sampleR.keep;
-        out_sampleR.strb = in_sampleR.strb;
-        out_sampleR.last = 0;
+        o_r.data(27, 4) = data_r;
+        o_r.data(3, 0) = 2;
+        o_r.user = s_r.user;
+        o_r.id = 1;
+        o_r.keep = s_r.keep;
+        o_r.strb = s_r.strb;
+        o_r.last = 0;
 
-        out.write(out_sampleL);
-        out.write(out_sampleR);
+        out.write(o_l);
+        out.write(o_r);
     }
 }

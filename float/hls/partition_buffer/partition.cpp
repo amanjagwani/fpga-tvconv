@@ -6,7 +6,7 @@ union fp_int
     uint32_t u;
 };
 
-void partition_buffer(hls::stream<stream_i2s_fft> &in,
+void partition_buffer(hls::stream<stream_audio> &in,
                       hls::stream<stream_fft_float> &out,
                       uint16_t &partition_size)
 {
@@ -24,7 +24,7 @@ void partition_buffer(hls::stream<stream_i2s_fft> &in,
     {
 #pragma HLS LOOP_TRIPCOUNT min = 1 max = 512
 #pragma HLS PIPELINE II = 1
-        stream_i2s_fft s = in.read();
+        stream_audio s = in.read();
         buffer[i] = s.data(23, 0);
     }
 
